@@ -35,3 +35,357 @@ A model is a javascript object that maps to a data relation (table). You can thi
 #### Migration
 
 Migrations (also known as 'schema evolution' or 'mutations') are a way of changing your database schema from one version into another. A migration lays out a plan to change your _model_. When the migration is _run_, it changes your model _and_ uses your ORM to map those changes into your database so your database is alterred accordingly.
+
+# Setup
+
+## Setup part 1 - getting the sequelize-cli tool (you only have to do this once)
+
+We need install a generator so we can use sequelize. Much like our other terminal apps, we will only install this once.
+
+```
+npm install -g sequelize-cli
+```
+
+
+### Setup part 2 - starting a new node project
+
+Let's build our first app using Sequelize! First we need to create a node app and include our dependencies. **All in terminal**:
+
+Create a new folder and add an index.js and .gitignore and initialize the repository
+
+```
+mkdir userapp
+cd userapp
+npm init
+touch index.js
+echo "node_modules" >> .gitignore
+```
+
+Add/save dependencies (sequelize needs pg for Postgres)
+
+```
+npm install express ejs pg sequelize
+```
+
+Create a database and initialize a sequelize project
+
+```
+createdb userapp
+sequelize init
+```
+
+#### For your historical reference...
+
+**WARNING (2017) Edited (2018):**
+At one point, sequelize-cli, sequelize, and pg modules were not playing nicely with each other. Luckily, this issue (for version Sequelize 4) has been resolved and we can resume using the current versions of both. In the future, be mindful that many modules you use are maintained by individual third parties and issues like this may come up! 
+
+If you used to use Sequelize 3, keep in mind that Sequelize 4 has breaking changes! If you need to upgrade your app, refer to these [docs](http://docs.sequelizejs.com/manual/tutorial/upgrade-to-v4.html#breaking-changes), which guide you in the update process.
+
+### Setup part 3 - config.json, models and migrations:
+
+In sublime we should now see a bunch of new folders. We now have config, migrations and models. This was created for us when we ran `sequelize init`.
+
+Let's start in the config folder and open up the config.json file. This file contains information about the database we are using as well as how to connect.
+
+We have three settings, one for development (what we will use now), test (for testing our code), and production (when we deploy our app on AWS/Heroku).
+
+Let's change the config.json so it looks like this.
+
+**config/config.json**
+
+```js
+{
+  "development": {
+    "database": "userapp_development",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
+  "test": {
+    "database": "userapp_test",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
+  "production": {
+    "database": "userapp_production",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  }
+}
+```
+
+The only thing we are actually changing for database setup, is the **database name**. If you have a username and password for your Postgres server, you'd include those as well.
+
+When we deploy to Heroku, they will provide us a long url that contains password and login that will be secure when deployed. More on this later.
+
+Once this is complete, let's move to the models folder.
+
+## Creating a model and a matching migration
+
+In order to create a model, we start with `sequelize model:create` and then specify the name of the model using the `--name` flag. Make sure your models are **always** singular (table name in plural, model name in singular). After passing in the `--name` flag followed by the name of your model, you can then add an `--attributes` flag and pass in data about your model. Generating the model also generates a corresponding migration. You only need to do this once for your model.
+
+```bash
+sequelize model:create --name user --attributes firstName:string,lastName:string,age:integer,email:string
+```
+
+If you want to make changes to your model after generating it - all you have to do is make a change and save it before running the migrate command.
+
+> Make sure you do **not** have any spaces between each of the attributes and their data types. Convention matters!
+
+
+This will generate the following migration
+
+**migrations/\*-create-user.js**
+
+```js
+"use strict";
+module.exports = {
+  up: function(migration, DataTypes, done) {
+    migration.createTable("users", {
+      id: {
+        allowNull: false,
+        autoIncrement: true,
+        primaryKey: true,
+        type: DataTypes.INTEGER
+      },
+      firstName: {
+        type: DataTypes.STRING
+      },
+      lastName: {
+        type: DataTypes.STRING
+      },
+      age: {
+        type: DataTypes.INTEGER
+      },
+      email: {
+        type: DataTypes.STRING
+      },
+      createdAt: {
+        allowNull: false,
+        type: DataTypes.DATE
+      },
+      updatedAt: {
+        allowNull: false,
+        type: DataTypes.DATE
+      }
+    }).done(done);
+  },
+  down: function(migration, DataTypes, done) {
+    migration.dropTable("Users").done(done);
+  }
+};
+```
+
+And a corresponding model:
+
+**models/user.js**
+```js
+"use strict";
+
+module.exports = function(sequelize, DataTypes) {
+  var user = sequelize.define("user", {
+    firstName: DataTypes.STRING,
+    lastName: DataTypes.STRING,
+    age: DataTypes.INTEGER,
+    email: DataTypes.STRING
+  }, {
+    classMethods: {
+      associate: function(models) {
+        // associations can be defined here
+      }
+    }
+  });
+
+  return user;
+};
+```
+
+## What is this "associate" thing in my model?
+
+In this function, we specify any relations/associations (one to one, one to many or many to many) between our models (hasMany or belongsTo). We'll discuss this more, but always remember, the association goes in the model and the foreign keys go in the migration.
+
+## Running the migration
+
+To run the migration, use the following command.
+
+```
+sequelize db:migrate
+```
+
+If you need to undo the last migration, this command will undo the last migration that was applied to the database.
+
+```
+sequelize db:migrate:undo
+```
+
+## Using your Models inside an app
+
+Just like using express, body-parser, and the other modules, your models must be required
+in order to access them in your app.
+
+```js
+var db = require("./models");
+db.user.create({
+  firstName: 'Brian',
+  lastName: 'Hague',
+  age: 99
+}).then(function(data) {
+  // you can now access the newly created task via the variable data
+});
+```
+
+### CRUD with Sequelize (Using our User model)
+
+#### Create
+
+```js
+db.user.create({
+  firstName: 'Brian',
+  lastName: 'Hague',
+  age: 99
+}).then(function(data) {
+  // you can now access the newly created task via the variable data
+});
+```
+
+#### Read One
+
+```js
+db.user.findOne({
+  where: {id: 2}
+}).then(function(user) {
+  // user will be an instance of User and stores the content of the table entry with id 2. if such an entry is not defined you will get null
+});
+```
+
+#### Find or Create
+
+The method findOrCreate can be used to check if a certain element is already existing in the database. If that is the case the method will result in a respective instance. If the element does not yet exist, it will be created with the provided attributes (a combination of `where` and `defaults`)
+
+```js
+db.user.findOrCreate({
+  where: {
+    firstName: 'Brian',
+    lastName: 'Smith'
+  },
+  defaults: { age: 88 }
+}).spread(function(user, created) {
+  console.log(user); // returns info about the user
+});
+```
+
+**NOTE:** The `findOrCreate` method historically had a different way of using the promise that returned with the data. You can see it in the code above. While other database read functions use the `.then` promise resolution function, the `findOrCreate` uses `.spread()`. This is because it returns not only the data that was found or created, it also returns a boolean true or false value indicating whether the record was created or not. If the value is `true` then the record was not found and had to be created. If it is `false` then the record already existed in the db and was retrieved. These two values are sent to our function in an array. By using the `.spread()` method, we can unpack that array into two individual variables (which above are called `user` and `created`.)
+
+In Sequelize version 5, which was released in March 2019, the library has better support for JavaScript promises. As a result, they are telling us a new way to use the promise for this function:
+
+```js
+db.user.findOrCreate({
+  where: {
+    firstName: 'Brian',
+    lastName: 'Smith'
+  },
+  defaults: { age: 88 }
+}).then(function([user, created]) {
+  console.log(user); // returns info about the user
+});
+```
+
+The difference here is that we are no longer using the odd `.spread()` method. Instead, we are using the standard `.then()` promise function. And inside that promise callback function, we wrap our two variables in a literal array. This will achieve the same effect of providing both the data and the boolean to your promise handler function. This will probably be the preferred way of doing this in future versions of Sequelize since the `.spread()` function is actually a feature of another node module called Bluebird. If Sequelize can move away from requiring a 3rd party library, they probably will want to do that so favor the `.then()` way of using it moving forward.
+
+#### Find All
+
+findAll returns more than one instance, which is useful if you need more than one record. find only returns one record.
+
+```js
+db.user.findAll().then(function(users) {
+  console.log(users);
+  // users will be an array of all User instances
+});
+```
+
+#### Update
+
+```js
+db.user.update({
+  lastName: 'Taco'
+}, {
+  where: {
+    firstName: 'Brian'
+  }
+}).then(function(user) {
+  // do something when done updating
+});
+```
+
+#### Delete (destroy)
+
+```js
+db.user.destroy({
+  where: { firstName: 'Brian' }
+}).then(function() {
+  // do something when done deleting
+});
+```
+
+### Promises
+After a sequelize statement, we can interact with the return of that object using `.then` and in `findOrCreate` we can use `.spread`.
+
+Finding a user
+
+```js
+db.user.findOne({where: {id: 1}});
+```
+
+This will execute a statement to find a user, but it will not let us interact with it. Because of the asynchronous nature of a call, we need to use a Promise (a type of callback) to get that data.
+
+```js
+db.user.findByPk(1).then(function(foundUser) {
+  console.log(foundUser);
+  //res.send("myTemplate", {user: foundUser);
+});
+```
+
+In a `findOrCreate`, a callback will return back an array, instead of a single object. There is a type of callback called `.spread` which will allow us to break apart that array and use similar to a traditional callback.
+
+```js
+db.user.findOrCreate({
+  where: { firstName: 'Brian' }
+}).spread(function(user, created) {
+  console.log(user); // returns info about the user
+});
+```
+
+But as mentioned above, it looks like this syntax will be replaced with more standard promise syntax moving forward. THis would be the new way to use the `findOrCreate` promise:
+
+```js
+db.user.findOrCreate({
+  where: { firstName: 'Brian' }
+}).then(function([user, created]) {
+  console.log(user); // returns info about the user
+});
+```
+
+## Sequelize Promises
+
+The main callback handlers to be used are as follows.
+
+* `.then` - default promise called when a query is completed.
+* `.spread` - used to spread an array of values to parameters. This is only used for `findOrCreate`.
+* `.catch` - triggered if something goes wrong (an error).
+* `.finally` - triggered after all other callbacks. Can be used for cleanup.
+
+The important thing to remember is that all queries take time and are asynchronous, so you MUST use promises to execute code that needs to happen after the query is completed. You will usually use `then`, except possibly for `findOrCreate` (but only if you need to support old versions.)
+
+## Useful Sequelize Documentation Links
+* Models
+  * [Data types](http://docs.sequelizejs.com/en/latest/docs/models-definition/#data-types)
+  * [Validations](http://docs.sequelizejs.com/en/latest/docs/models-definition/#validations)
+  * Note that Sequelize **expects the model to be singular**, and uses a pluralizer module to determine what the pluralized model should be. If you're unsure what the pluralizer will output, use this handy app to see what the pluralized model will be. [http://plural-test.herokuapp.com/](Plural Test)
+* Querying
+  * [Query usage (comparable to SELECT, INSERT, COUNT, MAX, etc.)](http://docs.sequelizejs.com/en/latest/docs/models-usage/)
+  * [Destroying records (comparable to DELETE)](http://docs.sequelizejs.com/en/latest/docs/instances/#destroying-deleting-persistent-instances)
+  * [Attribute selection](http://docs.sequelizejs.com/en/latest/docs/querying/#attributes)
+  * [Querying Basics and Operators (comparable to AND/OR/LIKE/IN)](http://docs.sequelizejs.com/en/latest/docs/querying/#basics)
+  * [Pagination and Limiting (comparable to OFFSET, LIMIT)](http://docs.sequelizejs.com/en/latest/docs/querying/#pagination-limiting)
+  * [Ordering (comparable to ORDER BY)](http://docs.sequelizejs.com/en/latest/docs/querying/#ordering)
+* Configuration and Commands
+  * [Sequelize CLI and Migrations](http://docs.sequelizejs.com/en/latest/docs/migrations/#the-cli)
