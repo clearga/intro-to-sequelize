@@ -96,16 +96,22 @@ Let's change the config.json so it looks like this.
 ```js
 {
   "development": {
-    "database": "userapp_development",
+    "username": "< your postgres username here >",
+    "password": "< your postgres user's password >",
+    "database": "userapp",
     "host": "127.0.0.1",
     "dialect": "postgres"
   },
   "test": {
+    "username": "< your postgres username here >",
+    "password": "< your postgres user's password >",
     "database": "userapp_test",
     "host": "127.0.0.1",
     "dialect": "postgres"
   },
   "production": {
+    "username": "< your postgres username here >",
+    "password": "< your postgres user's password >",
     "database": "userapp_production",
     "host": "127.0.0.1",
     "dialect": "postgres"
@@ -113,9 +119,11 @@ Let's change the config.json so it looks like this.
 }
 ```
 
+> Note: Remove the angle brackets from the username and password sections
+
 The only thing we are actually changing for database setup, is the **database name**. If you have a username and password for your Postgres server, you'd include those as well.
 
-When we deploy to Heroku, they will provide us a long url that contains password and login that will be secure when deployed. More on this later.
+When we deploy to Heroku (a hosting service for full stack apps), they will provide us a long url that contains password and login that will be secure when deployed. More on this later.
 
 Once this is complete, let's move to the models folder.
 
@@ -127,50 +135,49 @@ In order to create a model, we start with `sequelize model:create` and then spec
 sequelize model:create --name user --attributes firstName:string,lastName:string,age:integer,email:string
 ```
 
-If you want to make changes to your model after generating it - all you have to do is make a change and save it before running the migrate command.
-
 > Make sure you do **not** have any spaces between each of the attributes and their data types. Convention matters!
 
+If you want to make changes to your model after generating it - all you have to do is make a change and save it before running the migrate command.
 
 This will generate the following migration
 
 **migrations/\*-create-user.js**
 
 ```js
-"use strict";
+'use strict';
 module.exports = {
-  up: function(migration, DataTypes, done) {
-    migration.createTable("users", {
+  up: async (queryInterface, Sequelize) => {
+    await queryInterface.createTable('users', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
-        type: DataTypes.INTEGER
+        type: Sequelize.INTEGER
       },
       firstName: {
-        type: DataTypes.STRING
+        type: Sequelize.STRING
       },
-      lastName: {
-        type: DataTypes.STRING
+      lasName: {
+        type: Sequelize.STRING
       },
       age: {
-        type: DataTypes.INTEGER
+        type: Sequelize.INTEGER
       },
       email: {
-        type: DataTypes.STRING
+        type: Sequelize.STRING
       },
       createdAt: {
         allowNull: false,
-        type: DataTypes.DATE
+        type: Sequelize.DATE
       },
       updatedAt: {
         allowNull: false,
-        type: DataTypes.DATE
+        type: Sequelize.DATE
       }
-    }).done(done);
+    });
   },
-  down: function(migration, DataTypes, done) {
-    migration.dropTable("Users").done(done);
+  down: async (queryInterface, Sequelize) => {
+    await queryInterface.dropTable('users');
   }
 };
 ```
@@ -179,22 +186,30 @@ And a corresponding model:
 
 **models/user.js**
 ```js
-"use strict";
-
-module.exports = function(sequelize, DataTypes) {
-  var user = sequelize.define("user", {
+'use strict';
+const {
+  Model
+} = require('sequelize');
+module.exports = (sequelize, DataTypes) => {
+  class user extends Model {
+    /**
+     * Helper method for defining associations.
+     * This method is not a part of Sequelize lifecycle.
+     * The `models/index` file will call this method automatically.
+     */
+    static associate(models) {
+      // define association here
+    }
+  };
+  user.init({
     firstName: DataTypes.STRING,
-    lastName: DataTypes.STRING,
+    lasName: DataTypes.STRING,
     age: DataTypes.INTEGER,
     email: DataTypes.STRING
   }, {
-    classMethods: {
-      associate: function(models) {
-        // associations can be defined here
-      }
-    }
+    sequelize,
+    modelName: 'user',
   });
-
   return user;
 };
 ```
@@ -210,6 +225,8 @@ To run the migration, use the following command.
 ```
 sequelize db:migrate
 ```
+
+> If you get an error after running the command above, look at your config.json file and search for typos, making sure the database name, your postgres username, and password are all spelled correctly.
 
 If you need to undo the last migration, this command will undo the last migration that was applied to the database.
 
@@ -259,23 +276,9 @@ db.user.findOne({
 
 #### Find or Create
 
-The method findOrCreate can be used to check if a certain element is already existing in the database. If that is the case the method will result in a respective instance. If the element does not yet exist, it will be created with the provided attributes (a combination of `where` and `defaults`)
+The method `findOrCreate` can be used to check if a certain element is already existing in the database. If that is the case the method will result in a respective instance. If the element does not yet exist, it will be created with the provided attributes (a combination of `where` and `defaults`).
 
-```js
-db.user.findOrCreate({
-  where: {
-    firstName: 'Brian',
-    lastName: 'Smith'
-  },
-  defaults: { age: 88 }
-}).spread(function(user, created) {
-  console.log(user); // returns info about the user
-});
-```
-
-**NOTE:** The `findOrCreate` method historically had a different way of using the promise that returned with the data. You can see it in the code above. While other database read functions use the `.then` promise resolution function, the `findOrCreate` uses `.spread()`. This is because it returns not only the data that was found or created, it also returns a boolean true or false value indicating whether the record was created or not. If the value is `true` then the record was not found and had to be created. If it is `false` then the record already existed in the db and was retrieved. These two values are sent to our function in an array. By using the `.spread()` method, we can unpack that array into two individual variables (which above are called `user` and `created`.)
-
-In Sequelize version 5, which was released in March 2019, the library has better support for JavaScript promises. As a result, they are telling us a new way to use the promise for this function:
+In current versions of Sequelize, the library has better support for JavaScript promises and uses them to return results from the database asynchronously. Promised are a part of the language that we're introducing today but will go over in more depth during the React unit. Here is an example of `findOrCreate` in action:
 
 ```js
 db.user.findOrCreate({
@@ -289,7 +292,9 @@ db.user.findOrCreate({
 });
 ```
 
-The difference here is that we are no longer using the odd `.spread()` method. Instead, we are using the standard `.then()` promise function. And inside that promise callback function, we wrap our two variables in a literal array. This will achieve the same effect of providing both the data and the boolean to your promise handler function. This will probably be the preferred way of doing this in future versions of Sequelize since the `.spread()` function is actually a feature of another node module called Bluebird. If Sequelize can move away from requiring a 3rd party library, they probably will want to do that so favor the `.then()` way of using it moving forward.
+We are using the standard `.then()` promise function to run some code once our database returns what we queried for - it's called a promise because our initial request to the database will take some time and so the function "promises" to return a result one war or another. We can get that response inside that promise callback function, where we wrap our two variables in a literal array and pass it as a paramter to the callback function. This will achieve the same effect of providing both the data and the boolean to your promise handler function. 
+
+This will probably be the preferred way of doing this in future versions of Sequelize since the `.spread()` function is actually a feature of another node module called Bluebird. If Sequelize can move away from requiring a 3rd party library, they probably will want to do that so favor the `.then()` way of using it moving forward.
 
 #### Find All
 
@@ -369,7 +374,7 @@ db.user.findOrCreate({
 The main callback handlers to be used are as follows.
 
 * `.then` - default promise called when a query is completed.
-* `.spread` - used to spread an array of values to parameters. This is only used for `findOrCreate`.
+* `.spread` - used to spread an array of values to parameters. This is only used for `findOrCreate` on old versions of Sequelize. This method isn't used in the official documentation but you might it floating around stack overflow posts as little as 1 year old.
 * `.catch` - triggered if something goes wrong (an error).
 * `.finally` - triggered after all other callbacks. Can be used for cleanup.
 
